@@ -1,0 +1,1072 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0b0c10">
+<title>Gyro Drums</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cellipse cx='32' cy='40' rx='26' ry='10' fill='%23b8141c'/%3E%3Crect x='6' y='26' width='52' height='14' fill='%23b8141c'/%3E%3Cellipse cx='32' cy='26' rx='26' ry='10' fill='%23f3eee4'/%3E%3Cpath d='M14 4 L30 24 M50 4 L34 24' stroke='%23e0b070' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+:root { --bg:#0b0c10; --card:#14161d; --line:#2a2e3a; --tx:#f1ede4; --mut:#9aa0ad; --amb:#ffb347; --red:#e0323c; --ok:#5fe08a; }
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body { margin:0; height:100%; background:var(--bg); color:var(--tx); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; overflow:hidden; }
+button { font:inherit; color:var(--tx); background:#222632; border:1px solid var(--line); border-radius:12px; padding:10px 16px; cursor:pointer; }
+button:focus-visible { outline:3px solid var(--amb); outline-offset:2px; }
+button.primary { background:var(--amb); color:#1a1205; border:0; font-weight:800; }
+.hidden { display:none !important; }
+h1 { font-weight:900; letter-spacing:.04em; margin:0; }
+h1 b { color:var(--amb); }
+
+/* ---------- elegir ---------- */
+#pick { position:fixed; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; padding:20px; text-align:center; }
+#pick h1 { font-size:clamp(40px,9vw,88px); }
+#pick .row { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+#pick button { font-size:22px; padding:18px 26px; }
+#detMsg { color:var(--mut); }
+
+/* ---------- TELE ---------- */
+#tv { position:fixed; inset:0; }
+#c { position:absolute; inset:0; width:100%; height:100%; display:block; }
+.overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background:radial-gradient(ellipse at center, rgba(20,14,8,.72), rgba(5,5,8,.94)); text-align:center; padding:20px; z-index:5; }
+.overlay h1 { font-size:clamp(48px,9vw,110px); line-height:.95; }
+.overlay p { color:var(--mut); font-size:20px; margin:0; max-width:640px; }
+#btnStart { font-size:26px; padding:18px 34px; border-radius:16px; }
+#loadTxt { color:var(--mut); font-size:15px; min-height:20px; }
+.card { background:rgba(16,18,24,.88); border:1px solid var(--line); border-radius:18px; backdrop-filter:blur(10px); -webkit-backdrop-filter:blur(10px); }
+#lobby { position:absolute; top:18px; right:18px; width:min(330px,42vw); padding:16px; z-index:3; display:flex; flex-direction:column; gap:10px; }
+#lobby .ttl { font-weight:800; font-size:18px; }
+#qr { background:#f2f2f2; border-radius:12px; padding:10px; align-self:center; width:100%; max-width:240px; aspect-ratio:1; }
+#qr img, #qr canvas { width:100% !important; height:100% !important; image-rendering:pixelated; }
+.code { text-align:center; color:var(--mut); font-size:15px; }
+.code b { color:var(--tx); font-size:30px; letter-spacing:.18em; margin-left:6px; }
+.slot { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:10px; background:#1b1e27; font-size:15px; }
+.slot i { width:12px; height:12px; border-radius:50%; background:#444; flex:none; }
+.slot.on i { background:var(--ok); box-shadow:0 0 10px var(--ok); }
+.slot span { flex:1; }
+.slot small { color:var(--mut); }
+#lobby .tip { color:var(--mut); font-size:13px; line-height:1.4; }
+#lobby .tip b { color:var(--tx); }
+#hud { position:absolute; left:16px; right:16px; bottom:14px; display:flex; gap:10px; align-items:flex-end; z-index:2; pointer-events:none; }
+#hud > * { pointer-events:auto; }
+#chips { display:flex; gap:8px; flex-wrap:wrap; flex:1; }
+.chip { padding:8px 12px; border-radius:12px; font-size:14px; display:flex; gap:8px; align-items:center; }
+.chip .bar { width:70px; height:6px; border-radius:3px; background:#2a2e3a; overflow:hidden; }
+.chip .bar u { display:block; height:100%; width:0; background:var(--amb); transition:width .05s; }
+#tools { display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+#tools button { padding:8px 12px; font-size:14px; background:rgba(22,24,32,.9); }
+#tools button.on { border-color:var(--amb); color:var(--amb); }
+#keys { position:absolute; left:16px; top:16px; padding:12px 14px; font-size:13px; color:var(--mut); line-height:1.6; z-index:2; max-width:300px; }
+#keys b { color:var(--tx); display:inline-block; min-width:22px; text-align:center; background:#262a35; border-radius:5px; padding:0 5px; margin-right:4px; font-size:12px; }
+#toast { position:absolute; left:50%; top:22px; transform:translateX(-50%); padding:10px 18px; font-weight:700; z-index:4; opacity:0; transition:opacity .25s; pointer-events:none; }
+#toast.show { opacity:1; }
+#err { position:absolute; left:50%; top:50%; transform:translate(-50%,-50%); padding:20px; max-width:520px; text-align:center; z-index:9; }
+
+/* ---------- CELU (PALO) ---------- */
+#phone { position:fixed; inset:0; display:flex; flex-direction:column; padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom)); gap:12px; touch-action:none; user-select:none; -webkit-user-select:none; }
+#pJoin { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; }
+#pJoin h1 { font-size:44px; }
+#pCode { font-size:40px; letter-spacing:.3em; text-align:center; width:220px; padding:8px; border-radius:12px; border:1px solid var(--line); background:#151821; color:var(--tx); }
+#pKeys { display:grid; grid-template-columns:repeat(3,72px); gap:8px; }
+#pKeys button { font-size:24px; padding:12px 0; }
+#pGo { font-size:24px; padding:18px 30px; border-radius:16px; }
+#pMsg { color:var(--amb); min-height:22px; }
+.grip { color:var(--mut); font-size:15px; line-height:1.45; max-width:360px; }
+.grip b { color:var(--tx); }
+#pPlay { flex:1; display:flex; flex-direction:column; gap:12px; min-height:0; }
+#pTop { display:flex; justify-content:space-between; align-items:center; font-size:14px; color:var(--mut); }
+#pHand { font-weight:900; font-size:15px; padding:6px 12px; border-radius:20px; background:var(--amb); color:#1a1205; }
+#pCal { font-size:24px; font-weight:900; padding:20px; border-radius:18px; background:#1d2230; border:2px solid var(--amb); color:var(--amb); }
+#pCal:active { background:var(--amb); color:#1a1205; }
+#pHit { flex:1; min-height:90px; border-radius:18px; background:#12141b; border:1px solid var(--line); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:8px; transition:background .08s; }
+#pHit.flash { background:#3a2610; }
+#pPad { font-size:34px; font-weight:900; }
+#pVel { width:70%; height:10px; border-radius:5px; background:#262a35; overflow:hidden; }
+#pVel u { display:block; height:100%; width:0; background:var(--amb); }
+#pAng { color:var(--mut); font-size:13px; font-variant-numeric:tabular-nums; }
+#pOpts { display:flex; gap:8px; }
+#pOpts button { flex:1; font-size:13px; padding:10px 6px; }
+#pFeet { display:flex; gap:12px; height:30vh; min-height:150px; }
+#pFeet button { flex:1; border-radius:22px; font-size:22px; font-weight:900; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; touch-action:none; }
+#pFeet button small { font-size:12px; font-weight:500; color:var(--mut); }
+#pKick { background:#2a1214; border-color:#5a2026; }
+#pKick.down { background:var(--red); }
+#pHat { background:#14202a; border-color:#204a5a; }
+#pHat.down { background:#2a8fb0; }
+</style>
+</head>
+<body>
+
+<div id="pick" class="hidden">
+  <h1>GYRO <b>DRUMS</b></h1>
+  <div id="detMsg"></div>
+  <div class="row"><button id="btnTV">📺 Soy la pantalla</button><button id="btnStick">🥢 Soy un palo (celu)</button></div>
+</div>
+
+<!-- ===================== TELE ===================== -->
+<div id="tv" class="hidden">
+  <canvas id="c"></canvas>
+  <div id="start" class="overlay">
+    <h1>GYRO<br><b>DRUMS</b></h1>
+    <p>Una batería de verdad con dos celus como palos. Escaneá el QR con cada celu, apuntá al redoblante y golpeá el aire como si tuvieras los palos en la mano.</p>
+    <button id="btnStart" class="primary">🥁 Empezar</button>
+    <div id="loadTxt">Afinando la batería…</div>
+  </div>
+  <div id="lobby" class="card">
+    <div class="ttl">🥢 Escaneá con cada celu</div>
+    <div id="qr"></div>
+    <div class="code">Código <b id="code">····</b></div>
+    <div id="slots"></div>
+    <div class="tip">Agarrá el celu <b>de la parte de abajo, como un palo</b>, con la parte de arriba apuntando a la tele. Apuntá al <b>redoblante</b> y tocá <b>CENTRAR</b>. El pulgar queda sobre los pedales: <b>bombo</b> y <b>hi-hat</b>.</div>
+  </div>
+  <div id="keys" class="card hidden">
+    <div style="color:var(--tx);font-weight:800;margin-bottom:4px">Teclado / mouse</div>
+    <b>Q</b>Crash &nbsp;<b>E</b>Ride<br>
+    <b>A</b>Hi-hat &nbsp;<b>S</b>Redoblante<br>
+    <b>D</b>Tom 1 &nbsp;<b>F</b>Tom 2 &nbsp;<b>G</b>Tom de piso<br>
+    <b>␣</b>Bombo &nbsp;<b>⇧</b>Hi-hat abierto (mantener)<br>
+    Clic en un tambor o platillo también lo toca.
+  </div>
+  <div id="hud">
+    <div id="chips"></div>
+    <div id="tools">
+      <button id="tKeys">⌨️ Teclas</button>
+      <button id="tQR">🔳 QR</button>
+      <button id="tMet">⏱ Metrónomo</button>
+      <button id="tBpmM">−</button><button id="tBpm">90</button><button id="tBpmP">+</button>
+      <button id="tVol">🔊 Alto</button>
+    </div>
+  </div>
+  <div id="toast" class="card"></div>
+  <div id="err" class="card hidden"></div>
+</div>
+
+<!-- ===================== CELU ===================== -->
+<div id="phone" class="hidden">
+  <div id="pJoin">
+    <h1>🥢 <b>PALO</b></h1>
+    <input id="pCode" inputmode="none" readonly maxlength="4" placeholder="0000">
+    <div id="pKeys"><button>1</button><button>2</button><button>3</button><button>4</button><button>5</button><button>6</button><button>7</button><button>8</button><button>9</button><button>⌫</button><button>0</button><button>↩</button></div>
+    <button id="pGo" class="primary">🥁 Conectar</button>
+    <div id="pMsg"></div>
+    <div class="grip">Agarralo <b>como un palo</b>: la mano cerrada en la <b>parte de abajo</b>, la parte de <b>arriba apuntando a la tele</b> y el pulgar sobre la pantalla. Usá una funda que agarre bien o la correa: ¡no lo revoleés!</div>
+  </div>
+  <div id="pPlay" class="hidden">
+    <div id="pTop"><span id="pHand">MANO DERECHA</span><span id="pStat">🟢</span><span id="pPing">📶 —</span></div>
+    <button id="pCal">🎯 CENTRAR<br><small style="font-size:13px;font-weight:600">apuntá al redoblante y tocá</small></button>
+    <div id="pHit"><div id="pPad">¡Golpeá!</div><div id="pVel"><u></u></div><div id="pAng">—</div></div>
+    <div id="pOpts"><button id="oHand">⇄ Mano</button><button id="oRate">Rates 1x</button><button id="oSens">Golpe: Normal</button></div>
+    <div id="pFeet">
+      <button id="pHat">HI-HAT<small>mantené = abierto</small></button>
+      <button id="pKick">BOMBO<small>tocá</small></button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+const VERSION = 'v1.0';
+const PREFIX = 'gyrodrums-v1-';
+const D2R = Math.PI / 180, R2D = 180 / Math.PI;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const wrapDeg = d => ((d + 180) % 360 + 360) % 360 - 180;
+const store = { get(k) { try { return localStorage.getItem(k); } catch (_) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (_) {} } };
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+
+/* ============================================================
+   DETECTOR DE GOLPE (corre en el celu, a la velocidad del giroscopio)
+   down = velocidad con la que baja la punta del palo, en °/s.
+   Golpe = la punta baja rápido y después el puño la FRENA (como al pegarle al parche).
+   Dispara justo cuando empieza a frenar: es lo más temprano posible y la fuerza = el pico de velocidad.
+   ============================================================ */
+function makeDetector(cfg) {
+  let inStroke = false, peak = 0, t0 = 0, armed = true, lastHit = -1e9, lastPeak = 0;
+  return {
+    cfg,
+    feed(t, down, elev, yaw) {
+      const c = this.cfg;
+      if (!armed && down < Math.max(c.min * 0.35, lastPeak * 0.2)) armed = true;   // frenó o subió: listo para el próximo
+      if (!inStroke) {
+        if (armed && down > c.min && t - lastHit > 35) { inStroke = true; peak = down; t0 = t; }
+        return null;
+      }
+      if (down > peak) peak = down;
+      if (down < peak * 0.62 || t - t0 > 220) {
+        inStroke = false; armed = false; lastHit = t; lastPeak = peak;
+        const v = Math.pow(clamp((peak - c.min * 0.8) / (c.max - c.min * 0.8), 0.03, 1), 0.75);
+        // la punta todavía sigue bajando un poquito: dónde va a quedar al frenar
+        return { v, peak, elev: elev - Math.max(down, 0) * 0.012, yaw };
+      }
+      return null;
+    }
+  };
+}
+
+/* ============================================================
+   RUTEO: tele o celu (igual que en el Gyro Shooter)
+   ============================================================ */
+function detectDevice() {
+  const ua = navigator.userAgent, touch = navigator.maxTouchPoints || 0;
+  if (/Android ?TV|GoogleTV|Google TV|SMART-?TV|Tizen|Web0S|webOS|BRAVIA|AFT[A-Z]|CrKey|HbbTV|NetCast|Viera|Roku|PhilipsTV|MiTV|; TV|TV Build|Chromecast|Large Screen/i.test(ua)) return 'tv';
+  if (/iPhone|iPod|iPad|Mobi/i.test(ua)) return 'phone';
+  if (/Android/i.test(ua)) return touch > 0 ? 'phone' : 'tv';
+  if (/Macintosh/.test(ua) && touch > 1) return 'phone';
+  return 'tv';
+}
+/* ============================================================
+   ================  TELE / PC  ================
+   ============================================================ */
+let actx = null, bus = null, masterG = null, revSend = null;
+const SR_FALLBACK = 48000;
+const BANK = {};            // BANK[key][layer][variante] = AudioBuffer
+const LAYERS = [0.3, 0.65, 1.0];
+const MIX = { kick: 1.0, snare: 0.92, tom1: 0.85, tom2: 0.85, floor: 0.9, hatC: 0.5, hatO: 0.5, chick: 0.45, crash: 0.62, ride: 0.5, bell: 0.5 };
+const VOLS = [{ n: 'Bajo', v: .35 }, { n: 'Medio', v: .7 }, { n: 'Alto', v: 1 }];
+let volI = +(store.get('gd-vol') ?? 2); if (!(volI >= 0 && volI < 3)) volI = 2;
+let hatOpen = false, hatOpenKey = false, hatOpenPedal = false;
+const hatVoices = [];
+
+function initAudio() {
+  if (actx) return;
+  try { actx = new (window.AudioContext || window.webkitAudioContext)({ latencyHint: 'interactive' }); }
+  catch (e) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { actx = null; return; } }
+  masterG = actx.createGain(); masterG.gain.value = VOLS[volI].v;
+  const comp = actx.createDynamicsCompressor();
+  comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 3; comp.attack.value = 0.002; comp.release.value = 0.16;
+  bus = actx.createGain();
+  bus.connect(comp); comp.connect(masterG); masterG.connect(actx.destination);
+  // sala: respuesta al impulso generada (cuarto de ensayo chico, ~1.3 s)
+  const conv = actx.createConvolver(); conv.buffer = makeRoomIR(1.3);
+  revSend = actx.createGain(); revSend.gain.value = 0.22;
+  revSend.connect(conv); conv.connect(comp);
+}
+function makeRoomIR(sec) {
+  const SR = actx.sampleRate, n = Math.floor(sec * SR), b = actx.createBuffer(2, n, SR), rnd = mulberry32(77);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = b.getChannelData(ch); let lp = 0;
+    for (let i = 0; i < n; i++) {
+      const t = i / SR, k = 0.15 + 0.8 * Math.exp(-t / 0.25);          // se oscurece con el tiempo
+      lp += k * ((rnd() * 2 - 1) - lp);
+      d[i] = lp * Math.exp(-t / 0.32) * (t < 0.008 ? t / 0.008 : 1);
+    }
+    for (const [ms, a] of [[7, .5], [11, .35], [17, .3], [23, .22], [31, .18], [43, .12]]) { const i = Math.floor((ms + ch * 1.7) * SR / 1000); d[i] += a * (rnd() < .5 ? -1 : 1); }
+  }
+  return b;
+}
+
+/* ---------- síntesis física (se calcula una vez al abrir, en muestras) ---------- */
+function synthAll() {
+  const SR = actx ? actx.sampleRate : SR_FALLBACK;
+  const TAU = Math.PI * 2;
+  const buf = s => new Float32Array(Math.ceil(s * SR));
+  const noise = (n, r) => { const a = new Float32Array(n); for (let i = 0; i < n; i++) a[i] = r() * 2 - 1; return a; };
+  function bq(x, type, f, Q) {
+    f = clamp(f, 10, SR * 0.45);
+    const w = TAU * f / SR, cs = Math.cos(w), sn = Math.sin(w), al = sn / (2 * Q);
+    let b0, b1, b2; const a0 = 1 + al, a1 = -2 * cs, a2 = 1 - al;
+    if (type === 'lp') { b0 = (1 - cs) / 2; b1 = 1 - cs; b2 = b0; }
+    else if (type === 'hp') { b0 = (1 + cs) / 2; b1 = -(1 + cs); b2 = b0; }
+    else { b0 = al; b1 = 0; b2 = -al; }
+    const B0 = b0 / a0, B1 = b1 / a0, B2 = b2 / a0, A1 = a1 / a0, A2 = a2 / a0;
+    let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+    for (let i = 0; i < x.length; i++) { const xi = x[i], y = B0 * xi + B1 * x1 + B2 * x2 - A1 * y1 - A2 * y2; x2 = x1; x1 = xi; y2 = y1; y1 = y; x[i] = y; }
+    return x;
+  }
+  // envolvente: ataque lineal + caída exponencial
+  function env(x, tau, att = 0, delay = 0) {
+    const ds = Math.floor(delay * SR), as = Math.max(1, att * SR), k = Math.exp(-1 / (tau * SR));
+    let e = 1;
+    for (let i = 0; i < x.length; i++) {
+      if (i < ds) { x[i] = 0; continue; }
+      const j = i - ds; x[i] *= e * (j < as ? j / as : 1); e *= k;
+    }
+    return x;
+  }
+  const mixIn = (out, x, g) => { const n = Math.min(out.length, x.length); for (let i = 0; i < n; i++) out[i] += x[i] * g; };
+  // modo de membrana con caída de afinación (la tensión del parche baja después del golpe)
+  function mode(out, f0, amp, tau, glide, gtau, ph = 0) {
+    const dt = 1 / SR, dec = Math.exp(-dt / tau), gd = Math.exp(-dt / gtau);
+    let e = amp, g = glide;
+    for (let i = 0; i < out.length; i++) { out[i] += e * Math.sin(ph); ph += TAU * f0 * (1 + g) * dt; g *= gd; e *= dec; if (e < 1e-6) break; }
+  }
+  // parcial metálico (oscilador por rotación, rápido para cientos de parciales)
+  function partial(out, f, amp, tau, ph, att) {
+    if (f > SR * 0.45) return;
+    const w = TAU * f / SR, cw = Math.cos(w), sw = Math.sin(w), dec = Math.exp(-1 / (tau * SR)), an = Math.max(1, att * SR);
+    let c = Math.cos(ph), s = Math.sin(ph), e = amp;
+    for (let i = 0; i < out.length; i++) {
+      out[i] += e * s * (i < an ? i / an : 1);
+      const nc = c * cw - s * sw; s = s * cw + c * sw; c = nc; e *= dec;
+      if ((i & 4095) === 4095) { const m = 1 / Math.hypot(c, s); c *= m; s *= m; if (e < 1e-6) break; }
+    }
+  }
+  const sat = (x, d) => { const k = Math.tanh(d); for (let i = 0; i < x.length; i++) x[i] = Math.tanh(x[i] * d) / k; return x; };
+
+  const S = {
+    kick(v, r) {
+      const o = buf(0.95), f0 = 49 + r() * 2;
+      mode(o, f0, 1.0, 0.26 + 0.06 * v, 1.1 + 1.4 * v, 0.032);
+      mode(o, f0 * 1.6, 0.22, 0.08, 0.9 * v, 0.02, 1);
+      mode(o, f0 * 2.28, 0.08, 0.05, 0.6 * v, 0.02, 2);
+      const cl = env(bq(noise(o.length, r), 'bp', 2600 + 1800 * v, 0.9), 0.004, 0.0003); mixIn(o, cl, 0.5 + 0.9 * v);
+      const th = env(bq(noise(o.length, r), 'lp', 400, 0.7), 0.025, 0.001); mixIn(o, th, 0.6);
+      return sat(o, 1.3 + 1.6 * v);
+    },
+    snare(v, r) {
+      const o = buf(0.85), f0 = 182 + r() * 6, gl = 0.10 + 0.12 * v;
+      const R = [1, 1.59, 2.14, 2.30, 2.65, 2.92, 3.16, 3.50, 3.60], A = [1, .6, .45, .35, .3, .22, .2, .15, .12], T = [.17, .11, .09, .08, .07, .06, .05, .05, .04];
+      for (let k = 0; k < R.length; k++) mode(o, f0 * R[k] * (1 + (r() - .5) * .01), A[k] * (k ? 0.5 + 0.6 * v : 1), T[k], gl, 0.016, r() * TAU);
+      const wires = env(bq(bq(noise(o.length, r), 'hp', 1600, 0.7), 'lp', 4200 + 6500 * v, 0.6), 0.12 + 0.09 * v, 0.0015, 0.0008);
+      mixIn(o, wires, 0.9 + 0.5 * v);
+      const stick = env(bq(noise(o.length, r), 'hp', 3200, 0.7), 0.0016); mixIn(o, stick, 0.25 + 0.8 * v);
+      if (v > 0.8) { mode(o, 930, 0.35, 0.03, 0, 1); mode(o, 2380, 0.22, 0.02, 0, 1); }   // aro (rimshot) en los golpes fuertes
+      return sat(o, 1.1 + 0.8 * v);
+    },
+    tom(v, r, f0, size) {
+      const o = buf(1.6 * size), gl = 0.09 + 0.17 * v;
+      const R = [1, 1.5, 1.96, 2.42, 2.82], A = [1, .45, .26, .18, .1], T = [.5, .24, .17, .12, .09];
+      for (let k = 0; k < R.length; k++) mode(o, f0 * R[k] * (1 + (r() - .5) * .008), A[k] * (k ? 0.5 + 0.6 * v : 1), T[k] * size, gl, 0.065, r() * TAU);
+      const st = env(bq(noise(o.length, r), 'bp', 2400, 0.8), 0.0025); mixIn(o, st, 0.2 + 0.6 * v);
+      const sh = env(bq(noise(o.length, r), 'lp', 900, 0.7), 0.035, 0.001); mixIn(o, sh, 0.25);
+      return sat(o, 1.15 + 0.7 * v);
+    },
+    hat(v, r, open) {
+      const o = buf(open ? 1.7 : 0.38);
+      for (let k = 0; k < 72; k++) {
+        const f = 3000 * Math.pow(15000 / 3000, r()), a = (0.3 + r() * 0.7) * Math.pow(f / 3000, -0.35) * (f > 9000 ? 0.4 + 0.8 * v : 1);
+        const tau = open ? (0.35 + r() * 0.7) * Math.pow(f / 5000, -0.4) : 0.018 + r() * 0.035;
+        partial(o, f, a * 0.08, tau, r() * TAU, 0.0004);
+      }
+      for (let k = 0; k < 10; k++) partial(o, 450 + r() * 2200, 0.012, open ? 0.25 : 0.02, r() * TAU, 0.0003);
+      const nz = env(bq(noise(o.length, r), 'hp', 6500, 0.7), open ? 0.55 : 0.035, 0.0003); mixIn(o, nz, 0.5);
+      const tk = env(bq(noise(o.length, r), 'hp', 4000, 0.7), 0.0014); mixIn(o, tk, 0.5 * v + 0.15);
+      return bq(o, 'lp', 7000 + 9000 * v, 0.5);
+    },
+    chick(v, r) {
+      const o = buf(0.16);
+      mixIn(o, env(bq(noise(o.length, r), 'bp', 3400, 1.4), 0.011, 0.0008), 1);
+      mixIn(o, env(bq(noise(o.length, r), 'hp', 8000, 0.7), 0.02, 0.001), 0.35);
+      for (let k = 0; k < 20; k++) partial(o, 3000 + r() * 9000, 0.03, 0.012 + r() * .01, r() * TAU, 0.002);
+      return o;
+    },
+    crash(v, r) {
+      const o = buf(4.6);
+      for (let k = 0; k < 190; k++) {
+        const f = 280 * Math.pow(16000 / 280, r());
+        const a = (0.3 + r() * 0.7) * Math.pow(f / 1000, -0.12) * (f > 5000 ? 0.45 + 0.75 * v : 1);
+        const tau = clamp(3.2 * Math.pow(f / 600, -0.45) * (0.6 + r() * 0.8), 0.25, 4);
+        partial(o, f, a * 0.03, tau, r() * TAU, f > 3000 ? 0.006 + r() * 0.014 : 0.001);   // los agudos "florecen" un poquito después
+      }
+      mixIn(o, env(bq(bq(noise(o.length, r), 'hp', 2800, 0.7), 'lp', 8000 + 7000 * v, 0.6), 0.32, 0.002), 0.55);
+      mixIn(o, env(bq(noise(o.length, r), 'hp', 4500, 0.7), 1.4, 0.03), 0.07);
+      mixIn(o, env(bq(noise(o.length, r), 'hp', 3000, 0.7), 0.002), 0.4 * v);
+      return o;
+    },
+    ride(v, r, bell) {
+      const o = buf(5);
+      for (let k = 0; k < 130; k++) {
+        const f = 380 * Math.pow(14000 / 380, r());
+        partial(o, f, (0.3 + r() * 0.7) * 0.014 * (bell ? 0.6 : 1) * (f > 6000 ? 0.5 + 0.6 * v : 1), clamp(4 * Math.pow(f / 800, -0.35) * (0.6 + r() * .8), 0.4, 5), r() * TAU, 0.004);
+      }
+      const base = bell ? 640 : 410, PR = [1, 1.37, 2.21, 2.93, 3.62, 4.71, 5.93], PT = [2.6, 2.1, 1.7, 1.3, 1.0, 0.8, 0.6];
+      for (let k = 0; k < PR.length; k++) partial(o, base * PR[k] * (1 + (r() - .5) * .01), (bell ? 0.22 : 0.09) / (1 + k * .5), PT[k] * (bell ? 1.3 : 1), r() * TAU, 0.0005);
+      mixIn(o, env(bq(bq(noise(o.length, r), 'hp', 4800, 0.7), 'bp', 6500, 0.8), 0.004), 0.7 * (0.4 + v));   // "ping" del palo
+      mixIn(o, env(bq(noise(o.length, r), 'hp', 5000, 0.7), 1.1, 0.01), 0.05);
+      return o;
+    }
+  };
+  const jobs = [];
+  const add = (key, nVar, fn) => { BANK[key] = LAYERS.map(() => []); LAYERS.forEach((v, li) => { for (let k = 0; k < nVar; k++) jobs.push(() => { BANK[key][li][k] = toBuf(fn(v, mulberry32(1000 + key.length * 97 + li * 13 + k * 7919))); }); }); };
+  add('kick', 3, (v, r) => S.kick(v, r));
+  add('snare', 3, (v, r) => S.snare(v, r));
+  add('hatC', 3, (v, r) => S.hat(v, r, false));
+  add('chick', 2, (v, r) => S.chick(v, r));
+  add('tom1', 2, (v, r) => S.tom(v, r, 148, 0.85));
+  add('tom2', 2, (v, r) => S.tom(v, r, 116, 1.0));
+  add('floor', 2, (v, r) => S.tom(v, r, 84, 1.3));
+  add('hatO', 2, (v, r) => S.hat(v, r, true));
+  add('crash', 1, (v, r) => S.crash(v, r));
+  add('ride', 1, (v, r) => S.ride(v, r, false));
+  add('bell', 1, (v, r) => S.ride(v, r, true));
+  function toBuf(x) {
+    let pk = 0; for (let i = 0; i < x.length; i++) pk = Math.max(pk, Math.abs(x[i]));
+    const g = pk > 0 ? 0.95 / pk : 1, fade = Math.floor(0.006 * SR);
+    for (let i = 0; i < x.length; i++) x[i] *= g * (i > x.length - fade ? (x.length - i) / fade : 1);
+    if (!actx) return x;
+    const b = actx.createBuffer(1, x.length, SR); b.copyToChannel ? b.copyToChannel(x, 0) : b.getChannelData(0).set(x); return b;
+  }
+  const total = jobs.length; let done = 0;
+  return new Promise(res => {
+    const step = () => {
+      const t0 = performance.now();
+      while (jobs.length && performance.now() - t0 < 30) { jobs.shift()(); done++; }
+      $('loadTxt').textContent = done < total ? 'Afinando la batería… ' + Math.round(done / total * 100) + '%' : '✅ Batería afinada';
+      if (jobs.length) setTimeout(step, 0); else res();
+    };
+    step();
+  });
+}
+
+function pickBuf(key, v) {
+  const L = BANK[key]; if (!L) return null;
+  let li = v < 0.45 ? 0 : v < 0.8 ? 1 : 2;
+  for (let d = 0; d < 3; d++) for (const j of [li - d, li + d]) if (L[j] && L[j].length) return L[j][Math.floor(Math.random() * L[j].length)];
+  return null;
+}
+function playSample(key, v, pan) {
+  if (!actx) return null;
+  const b = pickBuf(key, v); if (!b) return null;
+  const t = actx.currentTime;
+  const src = actx.createBufferSource(); src.buffer = b;
+  src.playbackRate.value = 1 + (Math.random() - 0.5) * 0.014;
+  const f = actx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.value = 1400 + 19000 * Math.pow(v, 1.1); f.Q.value = 0.4;
+  const g = actx.createGain(); g.gain.value = (0.05 + 0.95 * Math.pow(v, 1.7)) * (MIX[key] || 1);
+  src.connect(f); f.connect(g);
+  let out = g;
+  if (actx.createStereoPanner) { const p = actx.createStereoPanner(); p.pan.value = pan || 0; g.connect(p); out = p; }
+  out.connect(bus); out.connect(revSend);
+  src.start(t);
+  return { src, g };
+}
+function chokeHats(fast) {
+  if (!actx) return; const t = actx.currentTime;
+  while (hatVoices.length) { const h = hatVoices.pop(); try { h.g.gain.cancelScheduledValues(t); h.g.gain.setTargetAtTime(0, t, fast ? 0.012 : 0.03); h.src.stop(t + 0.4); } catch (_) {} }
+}
+function setHatOpen(open) {
+  if (open === hatOpen) return;
+  hatOpen = open;
+  if (!open) { chokeHats(false); playSample('chick', 0.55, PADS_BY.hihat.pan); kickVisual(PADS_BY.hihat, 0.25); }
+}
+function updateHat() { setHatOpen(hatOpenKey || hatOpenPedal); }
+
+/* ---------- metrónomo ---------- */
+const metro = { on: false, bpm: +(store.get('gd-bpm') || 90), next: 0, beat: 0, iv: null };
+function metroClick(t, accent) {
+  const o = actx.createOscillator(), g = actx.createGain();
+  o.frequency.value = accent ? 1760 : 1180; g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(accent ? 0.35 : 0.22, t + 0.001); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+  o.connect(g); g.connect(masterG); o.start(t); o.stop(t + 0.06);
+}
+function metroToggle() {
+  if (!actx) return;
+  metro.on = !metro.on; $('tMet').classList.toggle('on', metro.on);
+  clearInterval(metro.iv);
+  if (metro.on) { metro.next = actx.currentTime + 0.1; metro.beat = 0; metro.iv = setInterval(() => { while (metro.next < actx.currentTime + 0.12) { metroClick(metro.next, metro.beat % 4 === 0); metro.next += 60 / metro.bpm; metro.beat++; } }, 25); }
+}
+function setBpm(b) { metro.bpm = clamp(b, 40, 240); $('tBpm').textContent = metro.bpm; store.set('gd-bpm', metro.bpm); }
+
+/* ============================================================
+   KIT: dónde está cada cosa.
+   Cada pieza está ubicada en una dirección (giro, altura) vista desde el puño.
+   La punta del palo recorre una esfera de radio RS: si apuntás a una pieza, la punta
+   está literalmente apoyada sobre ella en la escena 3D.
+   ============================================================ */
+const RS = 0.85;
+const PADS = [
+  { id: 'hihat', name: 'Hi-hat',      kind: 'hat',  yaw: -33, elev: -12, r: 0.18, pan: -0.45 },
+  { id: 'snare', name: 'Redoblante',  kind: 'drum', yaw: 0,   elev: -28, r: 0.178, depth: 0.14, pan: -0.08, snd: 'snare', chrome: true },
+  { id: 'tom1',  name: 'Tom 1',       kind: 'drum', yaw: 16,  elev: -9,  r: 0.14, depth: 0.2,  tilt: 14, pan: 0.05, snd: 'tom1' },
+  { id: 'tom2',  name: 'Tom 2',       kind: 'drum', yaw: 35,  elev: -10, r: 0.155, depth: 0.22, tilt: 14, pan: 0.28, snd: 'tom2' },
+  { id: 'floor', name: 'Tom de piso', kind: 'drum', yaw: 50,  elev: -31, r: 0.2,  depth: 0.4,  pan: 0.55, snd: 'floor' },
+  { id: 'crash', name: 'Crash',       kind: 'cym',  yaw: -25, elev: 19,  r: 0.23, tilt: 16, pan: -0.55, snd: 'crash' },
+  { id: 'ride',  name: 'Ride',        kind: 'cym',  yaw: 57,  elev: 11,  r: 0.27, tilt: 11, pan: 0.6,  snd: 'ride' },
+];
+const PADS_BY = {}; for (const p of PADS) { PADS_BY[p.id] = p; p.angR = R2D * Math.atan(p.r / RS); }
+const KICK = { id: 'kick', name: 'Bombo', pan: 0 };
+function pickPad(yaw, elev) {
+  let best = null, bd = 1e9;
+  for (const p of PADS) {
+    const d = Math.hypot((yaw - p.yaw) * 0.85, (elev - p.elev) * 1.2) - p.angR * 0.4;
+    if (d < bd) { bd = d; best = p; }
+  }
+  return bd < 30 ? best : null;
+}
+
+/* ============================================================
+   SALA (PeerJS) — mismo esquema que el Gyro Shooter
+   ============================================================ */
+let peer = null, myCode = null;
+const sticks = [0, 1].map(i => ({ i, hand: i === 0 ? 'R' : 'L', conn: null, ty: 0, te: 5, vy: i ? -14 : 14, ve: 6, lastO: 0, rtt: null, seen: new Set(), lastV: 0, contact: null, rest: null, anim: null, lastPad: '' }));
+const handName = h => h === 'R' ? 'Mano derecha' : 'Mano izquierda';
+function createRoom() {
+  if (typeof Peer === 'undefined') { toast('No cargó PeerJS: revisá internet', 4); return; }
+  const code = String(Math.floor(1000 + Math.random() * 9000));
+  peer = new Peer(PREFIX + code);
+  peer.on('open', () => {
+    myCode = code; $('code').textContent = code;
+    const url = location.origin + location.pathname + '?join=' + code;
+    $('qr').innerHTML = '';
+    try { new QRCode($('qr'), { text: url, width: 512, height: 512, colorDark: '#000000', colorLight: '#f2f2f2', correctLevel: QRCode.CorrectLevel.L }); } catch (e) { $('qr').classList.add('hidden'); }
+    refreshSlots();
+  });
+  peer.on('error', e => {
+    if (e.type === 'unavailable-id') { peer.destroy(); createRoom(); }
+    else toast('Error de conexión: ' + e.type, 3);
+  });
+  peer.on('connection', c => {
+    c.on('open', () => {
+      const s = sticks.find(q => !q.conn);
+      if (!s) { try { c.send({ t: 'state', txt: 'Ya hay 2 palos conectados' }); } catch (_) {} setTimeout(() => c.close(), 500); return; }
+      s.conn = c; s.seen.clear(); s.rtt = null; c.__s = s;
+      c.send({ t: 'hello', hand: s.hand, v: VERSION });
+      c.on('data', d => onStickData(s, d));
+      c.on('close', () => { if (s.conn !== c) return; s.conn = null; toast('🥢 ' + handName(s.hand) + ' desconectada', 3); refreshSlots(); });
+      toast('🥢 ' + handName(s.hand) + ' conectada', 2.5);
+      refreshSlots();
+      if (sticks.every(q => q.conn)) setTimeout(() => showLobby(false), 2500);
+    });
+  });
+}
+setInterval(() => { for (const s of sticks) if (s.conn && s.conn.open) { try { s.conn.send({ t: 'ping', s: performance.now(), r: s.rtt === null ? -1 : Math.round(s.rtt) }); } catch (_) {} } }, 1000);
+function onStickData(s, d) {
+  switch (d.t) {
+    case 'o': s.ty = d.y; s.te = d.e; s.lastO = performance.now(); break;
+    case 'h': if (dup(s, d.n)) return; phoneStrike(s, d.y, d.e, d.v); break;
+    case 'p': if (dup(s, d.n)) return;
+      if (d.k === 'kick') { if (d.on) hitKick(0.78 + Math.random() * 0.12); }
+      else if (d.k === 'hat') { hatOpenPedal = !!d.on; updateHat(); }
+      break;
+    case 'pong': { const r = performance.now() - d.s; s.rtt = s.rtt === null ? r : s.rtt * .7 + r * .3; break; }
+    case 'hand': {
+      s.hand = s.hand === 'R' ? 'L' : 'R';
+      const o = sticks.find(q => q !== s); if (o.hand === s.hand) { o.hand = s.hand === 'R' ? 'L' : 'R'; if (o.conn) o.conn.send({ t: 'hello', hand: o.hand, v: VERSION }); }
+      s.conn.send({ t: 'hello', hand: s.hand, v: VERSION }); refreshSlots(); break;
+    }
+  }
+}
+function dup(s, n) { if (s.seen.has(n)) return true; s.seen.add(n); if (s.seen.size > 64) s.seen.delete(s.seen.values().next().value); return false; }
+function refreshSlots() {
+  $('slots').innerHTML = ['R', 'L'].map(h => {
+    const s = sticks.find(q => q.hand === h);
+    return `<div class="slot ${s && s.conn ? 'on' : ''}"><i></i><span>🥢 ${handName(h)}</span><small>${s && s.conn ? 'conectada' : 'esperando…'}</small></div>`;
+  }).join('');
+  $('chips').innerHTML = sticks.slice().sort((a, b) => a.hand < b.hand ? 1 : -1).map(s => `<div class="chip card" id="chip${s.i}"><span>${s.hand === 'L' ? '🫲 Izq' : 'Der 🫱'}</span><span class="st">${s.conn ? '🟢' : '⚪'}</span><span class="bar"><u></u></span><small class="pg">${s.conn ? '' : 'sin celu'}</small></div>`).join('');
+}
+function showLobby(on) { $('lobby').classList.toggle('hidden', !on); $('tQR').classList.toggle('on', on); }
+let toastT = null;
+function toast(txt, sec = 2) { const el = $('toast'); el.textContent = txt; el.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove('show'), sec * 1000); }
+
+/* ============================================================
+   GOLPES
+   ============================================================ */
+function phoneStrike(s, yaw, elev, v) {
+  const pad = pickPad(yaw, elev);
+  s.lastV = v; const u = document.querySelector('#chip' + s.i + ' .bar u'); if (u) u.style.width = Math.round(v * 100) + '%';
+  if (!pad) { if (s.conn) s.conn.send({ t: 'fb', p: '· aire ·', v }); return; }
+  const yIn = pad.yaw + clamp(yaw - pad.yaw, -pad.angR * 0.8, pad.angR * 0.8);
+  s.contact = { pad, y: yIn, t: performance.now() };
+  hitPad(pad, v, yIn - pad.yaw);
+  if (s.conn) s.conn.send({ t: 'fb', p: pad.name, v });
+}
+function hitPad(pad, v, offYaw = 0) {
+  let key = pad.snd;
+  if (pad.id === 'hihat') {
+    key = hatOpen ? 'hatO' : 'hatC';
+    chokeHats(true);
+    const vo = playSample(key, v, pad.pan); if (vo && hatOpen) hatVoices.push(vo);
+  } else {
+    if (pad.id === 'ride' && Math.abs(offYaw) < pad.angR * 0.22) key = 'bell';    // al centro del ride suena la campana
+    playSample(key, v, pad.pan);
+  }
+  kickVisual(pad, v, offYaw);
+}
+function hitKick(v) { playSample('kick', v, 0); kickVisual(KICK, v); }
+
+/* ============================================================
+   ESCENA 3D (Three.js r128, igual que el juego)
+   ============================================================ */
+let T3 = null, renderer, scene, camera, P0, clock, raycaster;
+const meshPad = new Map();
+const _v1 = () => new THREE.Vector3();
+function loadScript(src) { return new Promise((ok, ko) => { const s = document.createElement('script'); s.src = src; s.onload = ok; s.onerror = ko; document.head.appendChild(s); }); }
+function dirOf(yaw, elev, out) { const y = yaw * D2R, e = elev * D2R; return out.set(Math.sin(y) * Math.cos(e), Math.sin(e), -Math.cos(y) * Math.cos(e)); }
+
+function buildScene() {
+  T3 = THREE;
+  renderer = new THREE.WebGLRenderer({ canvas: $('c'), antialias: true, powerPreference: 'high-performance' });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.6));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 0.82;
+  renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x07080b);
+  scene.fog = new THREE.Fog(0x07080b, 4, 11);
+  camera = new THREE.PerspectiveCamera(48, 1, 0.05, 40);
+  P0 = new THREE.Vector3(0, 1.05, 0);
+  clock = new THREE.Clock(); raycaster = new THREE.Raycaster();
+
+  // reflejos para los metales: un "estudio" con paneles de luz, horneado como entorno
+  const pm = new THREE.PMREMGenerator(renderer), es = new THREE.Scene();
+  es.background = new THREE.Color(0x050505);
+  const panel = (w, h, col, x, y, z) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshBasicMaterial({ color: col, side: THREE.DoubleSide })); m.position.set(x, y, z); m.lookAt(0, 0, 0); es.add(m); };
+  panel(6, 2, 0xffffff, 0, 6, -2); panel(3, 3, 0xffb070, -6, 2, 1); panel(3, 3, 0x70a0ff, 6, 2, 1); panel(8, 1, 0xff5060, 0, 1, -7); panel(4, 4, 0x404040, 0, -5, 0);
+  scene.environment = pm.fromScene(es, 0.03).texture;
+
+  // luces de escenario
+  scene.add(new THREE.HemisphereLight(0x8090b0, 0x1a0f08, 0.22));
+  const key = new THREE.SpotLight(0xffe2c0, 1.7, 12, 0.55, 0.6, 1.2);
+  key.position.set(0.6, 4.2, 1.2); key.target.position.set(0.1, 0.6, -0.6); key.castShadow = true;
+  key.shadow.mapSize.set(1024, 1024); key.shadow.bias = -0.0004; key.shadow.radius = 4;
+  scene.add(key, key.target);
+  const rimA = new THREE.SpotLight(0xff3a6a, 3, 9, 0.5, 0.7, 1.4); rimA.position.set(-2.6, 3, -3.2); rimA.target.position.set(0, 0.8, -0.6); scene.add(rimA, rimA.target);
+  const rimB = new THREE.SpotLight(0x3ab0ff, 3, 9, 0.5, 0.7, 1.4); rimB.position.set(2.8, 3, -3); rimB.target.position.set(0.2, 0.8, -0.6); scene.add(rimB, rimB.target);
+  const fill = new THREE.PointLight(0xffa860, 0.5, 5); fill.position.set(0, 1.9, 0.9); scene.add(fill);
+
+  // piso y alfombra
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshStandardMaterial({ color: 0x15120f, roughness: 0.85, metalness: 0 }));
+  floor.rotation.x = -Math.PI / 2; floor.receiveShadow = true; scene.add(floor);
+  const rugTex = canvasTex(256, 256, (x, w, h) => { x.fillStyle = '#2c1012'; x.fillRect(0, 0, w, h); for (let i = 0; i < 9000; i++) { x.fillStyle = `rgba(${Math.random() < .5 ? '0,0,0' : '255,200,190'},${Math.random() * .08})`; x.fillRect(Math.random() * w, Math.random() * h, 1.5, 1.5); } });
+  const rug = new THREE.Mesh(new THREE.CircleGeometry(1.45, 64), new THREE.MeshStandardMaterial({ map: rugTex, roughness: 1 }));
+  rug.rotation.x = -Math.PI / 2; rug.position.set(0.15, 0.003, -0.55); rug.receiveShadow = true; scene.add(rug);
+  // humo/halos de fondo
+  for (const [c, x] of [[0xff2a5a, -2.2], [0x2aa0ff, 2.4], [0xffa040, 0.2]]) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowT(), color: c, transparent: true, opacity: 0.09, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sp.scale.set(5, 3.2, 1); sp.position.set(x, 1.6, -4.5); scene.add(sp);
+  }
+
+  const M = mats();
+  for (const p of PADS) {
+    p.center = dirOf(p.yaw, p.elev, new THREE.Vector3()).multiplyScalar(RS).add(P0);
+    p.phys = { jy: 0, jv: 0, flash: 0, wx: 0, wz: 0, vx: 0, vz: 0, spin: 0, spinV: 0 };
+    if (p.kind === 'drum') buildDrum(p, M);
+    else if (p.kind === 'cym') buildCymbal(p, M);
+    else buildHat(p, M);
+  }
+  buildKick(M);
+  buildSticks(M);
+  resize(); window.addEventListener('resize', resize);
+  renderer.domElement.addEventListener('pointerdown', onClick3D);
+  requestAnimationFrame(loop);
+}
+const glowTex = (() => { const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64); g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(.35, 'rgba(255,255,255,.35)'); g.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = g; x.fillRect(0, 0, 128, 128); return c; })();
+let _glowT = null; const glowT = () => _glowT || (_glowT = new THREE.CanvasTexture(glowTex));
+function canvasTex(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.encoding = THREE.sRGBEncoding; t.anisotropy = 4; return t; }
+function mats() {
+  const shellTex = canvasTex(512, 64, (x, w, h) => { const g = x.createLinearGradient(0, 0, w, 0); g.addColorStop(0, '#5c0a10'); g.addColorStop(.5, '#a3141d'); g.addColorStop(1, '#5c0a10'); x.fillStyle = g; x.fillRect(0, 0, w, h); for (let i = 0; i < 2500; i++) { x.fillStyle = `rgba(255,${180 + Math.random() * 60},${150 + Math.random() * 80},${Math.random() * .35})`; x.fillRect(Math.random() * w, Math.random() * h, 1, 1); } });
+  shellTex.wrapS = THREE.RepeatWrapping; shellTex.repeat.set(3, 1);
+  const grooves = canvasTex(8, 512, (x, w, h) => { for (let i = 0; i < h; i++) { const v = 170 + Math.random() * 50 + (i % 5 < 2 ? 25 : -10); x.fillStyle = `rgb(${v},${v * 0.92 | 0},${v * 0.7 | 0})`; x.fillRect(0, i, w, 1); } });
+  return {
+    shell: new THREE.MeshPhysicalMaterial({ map: shellTex, metalness: 0.35, roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.06 }),
+    chrome: new THREE.MeshStandardMaterial({ color: 0x8c8c96, metalness: 1, roughness: 0.22, envMapIntensity: 0.7 }),
+    dark: new THREE.MeshStandardMaterial({ color: 0x1a1a1e, metalness: 0.6, roughness: 0.45 }),
+    head: new THREE.MeshStandardMaterial({ color: 0xcfc8b8, roughness: 0.78, metalness: 0, emissive: 0xffa040, emissiveIntensity: 0 }),
+    reso: new THREE.MeshStandardMaterial({ color: 0x222226, roughness: 0.6, side: THREE.DoubleSide }),
+    brass: new THREE.MeshStandardMaterial({ color: 0xe0b45e, map: grooves, metalness: 1, roughness: 0.3, side: THREE.DoubleSide, emissive: 0xffa040, emissiveIntensity: 0 }),
+    wood: new THREE.MeshStandardMaterial({ color: 0xb98a52, roughness: 0.55, metalness: 0 }),
+    tape: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 }),
+  };
+}
+const UP = () => new THREE.Vector3(0, 1, 0);
+function rod(a, b, r, mat, parent = scene) {
+  const d = new THREE.Vector3().subVectors(b, a), L = d.length();
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, L, 10), mat);
+  m.position.copy(a).addScaledVector(d, 0.5); m.quaternion.setFromUnitVectors(UP(), d.normalize()); m.castShadow = true; parent.add(m); return m;
+}
+function tripod(x, z, topY, M) {
+  const base = new THREE.Vector3(x, 0.32, z);
+  rod(base, new THREE.Vector3(x, topY, z), 0.009, M.chrome);
+  for (let k = 0; k < 3; k++) { const a = k * 2.094 + 0.5; rod(base, new THREE.Vector3(x + Math.cos(a) * 0.26, 0.01, z + Math.sin(a) * 0.26), 0.007, M.chrome); }
+}
+function buildDrum(p, M) {
+  const g = new THREE.Group(), r = p.r, d = p.depth;
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d, 56, 1, true), p.chrome ? M.chrome : M.shell);
+  shell.position.y = -d / 2; shell.castShadow = true; shell.receiveShadow = true; g.add(shell);
+  const hm = M.head.clone(); p.headMat = hm;
+  const head = new THREE.Mesh(new THREE.CircleGeometry(r * 0.985, 56), hm); head.rotation.x = -Math.PI / 2; head.position.y = 0.002; head.receiveShadow = true; g.add(head); p.headMesh = head;
+  const bot = new THREE.Mesh(new THREE.CircleGeometry(r, 40), M.reso); bot.rotation.x = Math.PI / 2; bot.position.y = -d; g.add(bot);
+  for (const y of [0.004, -d - 0.002]) { const h = new THREE.Mesh(new THREE.TorusGeometry(r + 0.003, 0.0065, 8, 56), M.chrome); h.rotation.x = Math.PI / 2; h.position.y = y; h.castShadow = true; g.add(h); }
+  const nL = r > 0.17 ? 10 : 8;
+  for (let k = 0; k < nL; k++) {
+    const a = k / nL * Math.PI * 2, lug = new THREE.Mesh(new THREE.BoxGeometry(0.014, Math.min(0.06, d * 0.4), 0.018), M.chrome);
+    lug.position.set(Math.cos(a) * (r + 0.008), -d / 2, Math.sin(a) * (r + 0.008)); lug.rotation.y = -a; g.add(lug);
+    rod(new THREE.Vector3(Math.cos(a) * (r + 0.006), 0.004, Math.sin(a) * (r + 0.006)), new THREE.Vector3(Math.cos(a) * (r + 0.006), -d / 2 + 0.03, Math.sin(a) * (r + 0.006)), 0.0022, M.chrome, g);
+  }
+  // el parche queda donde la punta del palo lo toca
+  g.position.copy(p.center);
+  g.rotation.set((p.tilt || 0) * D2R, -p.yaw * D2R, 0, 'YXZ');
+  scene.add(g); p.group = g; p.base = g.position.clone();
+  g.traverse(o => { if (o.isMesh) meshPad.set(o, p); });
+  // soportes
+  if (p.id === 'snare') tripod(p.center.x, p.center.z, p.center.y - d, M);
+  if (p.id === 'floor') for (let k = 0; k < 3; k++) { const a = k * 2.094 + 0.3, top = new THREE.Vector3(p.center.x + Math.cos(a) * (r + 0.02), p.center.y - 0.09, p.center.z + Math.sin(a) * (r + 0.02)); rod(top, new THREE.Vector3(top.x + Math.cos(a) * 0.05, 0.01, top.z + Math.sin(a) * 0.05), 0.008, M.chrome); }
+}
+function cymGeo(r, cup = 1) {
+  const pts = [], bell = 0.065;
+  pts.push(new THREE.Vector2(0.001, 0.034 * cup));
+  for (let i = 0; i <= 6; i++) { const t = i / 6, x = 0.008 + t * (bell - 0.008); pts.push(new THREE.Vector2(x, (0.034 - 0.022 * Math.pow(t, 1.6)) * cup)); }
+  for (let i = 1; i <= 24; i++) { const t = i / 24, x = bell + t * (r - bell); pts.push(new THREE.Vector2(x, 0.012 * Math.pow(1 - t, 1.5) * cup)); }
+  return new THREE.LatheGeometry(pts, 72);
+}
+function buildCymbal(p, M) {
+  const pivot = new THREE.Group(), spin = new THREE.Group(), mm = M.brass.clone(); p.headMat = mm;
+  const c = new THREE.Mesh(cymGeo(p.r), mm); c.castShadow = true; spin.add(c);
+  const felt = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.02, 12), M.tape); felt.position.y = 0.044; spin.add(felt);
+  pivot.add(spin); pivot.position.copy(p.center); pivot.position.y -= 0.01;
+  pivot.rotation.set(p.tilt * D2R, -p.yaw * D2R, 0, 'YXZ');
+  scene.add(pivot); p.group = pivot; p.spinG = spin; p.baseRot = pivot.rotation.clone();
+  meshPad.set(c, p);
+  // pie con jirafa
+  const top = p.center.clone(); top.y -= 0.03;
+  const mid = new THREE.Vector3(top.x * 1.12, top.y - 0.32, top.z * 1.12);
+  rod(mid, top, 0.007, M.chrome); tripod(mid.x, mid.z, mid.y, M);
+}
+function buildHat(p, M) {
+  const g = new THREE.Group(), mm = M.brass.clone(); p.headMat = mm;
+  const bottom = new THREE.Mesh(cymGeo(p.r, 0.8), mm); bottom.rotation.x = Math.PI; bottom.position.y = -0.03; g.add(bottom);
+  const topC = new THREE.Mesh(cymGeo(p.r, 0.8), mm); topC.castShadow = true; g.add(topC); p.hatTop = topC;
+  g.position.copy(p.center); g.position.y -= 0.012; scene.add(g); p.group = g; p.base = g.position.clone();
+  meshPad.set(bottom, p); meshPad.set(topC, p);
+  rod(new THREE.Vector3(p.center.x, 0.32, p.center.z), new THREE.Vector3(p.center.x, p.center.y + 0.05, p.center.z), 0.0065, M.chrome);
+  tripod(p.center.x, p.center.z, 0.4, M);
+}
+function buildKick(M) {
+  const r = 0.28, d = 0.42, g = new THREE.Group();
+  const shell = new THREE.Mesh(new THREE.CylinderGeometry(r, r, d, 64, 1, true), M.shell); shell.castShadow = true; shell.receiveShadow = true; g.add(shell);
+  const logo = canvasTex(512, 512, (x, w) => { x.fillStyle = '#0d0d10'; x.beginPath(); x.arc(w / 2, w / 2, w / 2, 0, 7); x.fill(); x.strokeStyle = '#ffb347'; x.lineWidth = 10; x.beginPath(); x.arc(w / 2, w / 2, w * .36, 0, 7); x.stroke(); x.fillStyle = '#ffb347'; x.textAlign = 'center'; x.font = '900 86px system-ui,sans-serif'; x.fillText('GYRO', w / 2, w / 2 - 6); x.font = '900 64px system-ui,sans-serif'; x.fillStyle = '#f1ede4'; x.fillText('DRUMS', w / 2, w / 2 + 66); });
+  const fm = new THREE.MeshStandardMaterial({ map: logo, roughness: 0.6, emissive: 0xffa040, emissiveIntensity: 0 });
+  const front = new THREE.Mesh(new THREE.CircleGeometry(r * 0.99, 64), fm); front.position.y = -d / 2; front.rotation.x = Math.PI / 2; front.rotation.z = Math.PI; g.add(front);
+  const back = new THREE.Mesh(new THREE.CircleGeometry(r * 0.99, 64), new THREE.MeshStandardMaterial({ color: 0x9d968a, roughness: 0.85 })); back.position.y = d / 2; back.rotation.x = -Math.PI / 2; g.add(back);
+  for (const y of [d / 2 + 0.003, -d / 2 - 0.003]) { const h = new THREE.Mesh(new THREE.TorusGeometry(r + 0.004, 0.012, 8, 64), M.dark); h.rotation.x = Math.PI / 2; h.position.y = y; g.add(h); }
+  g.rotation.x = Math.PI / 2; g.position.set(0.12, r + 0.02, -0.98);
+  scene.add(g); KICK.group = g; KICK.base = g.position.clone(); KICK.headMat = fm; KICK.phys = { jy: 0, jv: 0, flash: 0 };
+  g.traverse(o => { if (o.isMesh) meshPad.set(o, KICK); });
+  // patas y pedal con maza
+  for (const s of [-1, 1]) rod(new THREE.Vector3(0.12 + s * 0.24, 0.12, -1.12), new THREE.Vector3(0.12 + s * 0.36, 0.01, -1.24), 0.008, M.chrome);
+  const beater = new THREE.Group(); beater.position.set(0.12, 0.1, -0.68);
+  rod(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0.22, 0), 0.004, M.chrome, beater);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.03, 16, 12), M.tape); ball.position.y = 0.22; beater.add(ball);
+  scene.add(beater); KICK.beater = beater;
+  // los toms van montados arriba del bombo
+  for (const id of ['tom1', 'tom2']) { const t = PADS_BY[id]; rod(new THREE.Vector3(0.12 + (t.center.x - 0.12) * 0.3, r * 2 + 0.02, -0.9), new THREE.Vector3(t.center.x, t.center.y - t.depth - 0.02, t.center.z), 0.009, M.chrome); }
+  // pedal del hi-hat
+  const hh = PADS_BY.hihat; const pd = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.015, 0.24), M.tape); pd.position.set(hh.center.x + 0.05, 0.03, hh.center.z + 0.25); scene.add(pd);
+}
+const stickObjs = [];
+function buildSticks(M) {
+  for (const s of sticks) {
+    const g = new THREE.Group();
+    const geo = new THREE.CylinderGeometry(0.0055, 0.0085, 1, 14); geo.translate(0, 0.5, 0);
+    const body = new THREE.Mesh(geo, M.wood); body.castShadow = true; g.add(body);
+    const tip = new THREE.Mesh(new THREE.SphereGeometry(0.0085, 12, 10), M.wood); g.add(tip);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.0095, 0.0095, 0.12, 14), M.tape); grip.position.y = 0.06; g.add(grip);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowT(), color: 0xffb347, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+    glow.scale.set(0.12, 0.12, 1); scene.add(glow);
+    scene.add(g); stickObjs[s.i] = { g, body, tip, glow, tipPos: new THREE.Vector3() };
+  }
+}
+// ondas en el parche / destello en el platillo
+const ripples = [];
+function ripple(pad, v) {
+  if (!T3 || !pad.center) return;
+  const m = new THREE.Mesh(new THREE.RingGeometry(0.86, 1, 48), new THREE.MeshBasicMaterial({ color: 0xffc070, transparent: true, opacity: 0.55 * (0.3 + v), depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+  m.position.copy(pad.center); m.position.y += 0.006;
+  if (pad.group) m.quaternion.copy(pad.group.quaternion);
+  m.rotateX(-Math.PI / 2); m.scale.setScalar(0.01);
+  scene.add(m); ripples.push({ m, t: 0, r: pad.r });
+}
+function kickVisual(pad, v, offYaw = 0) {
+  if (!T3) return;
+  const ph = pad.phys; if (!ph) return;
+  ph.flash = Math.min(1.2, ph.flash + 0.4 + v);
+  if (pad === KICK) { ph.jv -= 0.25 * v; camShake = Math.min(1, camShake + 0.5 * v); KICK.beaterT = 0; return; }
+  if (pad.kind === 'drum') { ph.jv -= 0.35 * v; ripple(pad, v); }
+  else if (pad.kind === 'cym') {
+    const side = clamp(offYaw / pad.angR, -1, 1);
+    ph.vx += (2.2 + 1.2 * Math.abs(side)) * v * (pad.id === 'crash' ? 1.6 : 1); ph.vz += -side * 2.5 * v; ph.spinV += (side >= 0 ? 1 : -1) * 0.8 * v;
+  } else { ph.jv -= 0.18 * v; }
+}
+let camShake = 0;
+function resize() {
+  const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h;
+  camera.fov = w / h < 1.2 ? 66 : 46; camera.updateProjectionMatrix();
+}
+function onClick3D(e) {
+  if (!actx) return;
+  const r = renderer.domElement.getBoundingClientRect();
+  raycaster.setFromCamera({ x: (e.clientX - r.left) / r.width * 2 - 1, y: -(e.clientY - r.top) / r.height * 2 + 1 }, camera);
+  const hit = raycaster.intersectObjects([...meshPad.keys()], false)[0]; if (!hit) return;
+  const pad = meshPad.get(hit.object);
+  if (pad === KICK) { hitKick(0.8); return; }
+  autoStrike(pad, 0.8);
+}
+// sin celu: el palo se mueve solo hacia la pieza (teclado / mouse)
+let altHand = 0;
+function autoStrike(pad, v) {
+  let s = sticks.find(q => !q.conn && (pad.yaw < 5 ? q.hand === 'L' : q.hand === 'R'));
+  if (!s) { s = sticks.find(q => !q.conn); }
+  if (s && !s.conn) { s.anim = { pad, t: 0 }; }
+  hitPad(pad, v, 0);
+}
+
+const _a = { tip: null, dir: null, hand: null, q: null };
+function loop() {
+  requestAnimationFrame(loop);
+  const dt = Math.min(0.05, clock.getDelta()), now = performance.now();
+  if (!_a.tip) { _a.tip = new THREE.Vector3(); _a.dir = new THREE.Vector3(); _a.hand = new THREE.Vector3(); }
+  // --- palos ---
+  for (const s of sticks) {
+    const o = stickObjs[s.i];
+    let yaw, elev;
+    if (s.conn) {
+      const k = 1 - Math.exp(-dt * 45);                 // sigue al celu casi 1:1 (suaviza solo el ruido de la red)
+      s.vy += wrapDeg(s.ty - s.vy) * k; s.ve += (s.te - s.ve) * k;
+      yaw = s.vy; elev = s.ve;
+      if (s.contact && now - s.contact.t < 70) { yaw = s.contact.y; elev = s.contact.pad.elev; }     // el golpe se ve apoyado en la pieza aunque la red venga atrasada
+    } else {
+      const restY = s.hand === 'R' ? 14 : -14, restE = 6;
+      yaw = restY; elev = restE;
+      if (s.anim) {
+        s.anim.t += dt; const t = s.anim.t, p = s.anim.pad;
+        const a = t < 0.05 ? t / 0.05 : t < 0.09 ? 1 : Math.max(0, 1 - (t - 0.09) / 0.22);
+        const lift = t < 0.05 ? 0 : (t < 0.09 ? 0 : Math.sin(Math.min(1, (t - 0.09) / 0.22) * Math.PI) * 10);
+        yaw = restY + (p.yaw - restY) * a; elev = restE + (p.elev - restE) * a + lift;
+        if (t > 0.32) s.anim = null;
+      }
+      s.vy = yaw; s.ve = elev;
+    }
+    // choque con los parches: si la punta viene de arriba y entra en una pieza, queda apoyada en la superficie
+    let rested = null;
+    for (const p of PADS) {
+      const dy = Math.abs(wrapDeg(yaw - p.yaw)) * Math.cos(p.elev * D2R);
+      if (dy < p.angR * 1.05 && elev < p.elev && elev > p.elev - 35 && (s.rest === p || s.prevE >= p.elev - 1)) { rested = p; elev = p.elev; break; }
+    }
+    s.rest = rested; s.prevE = elev;
+    dirOf(yaw, elev, _a.dir); _a.tip.copy(P0).addScaledVector(_a.dir, RS);
+    const base = new THREE.Vector3(s.hand === 'R' ? 0.17 : -0.17, 0.97, 0.05);
+    const d = new THREE.Vector3().subVectors(_a.tip, base).normalize(), L = 0.48;
+    _a.hand.copy(_a.tip).addScaledVector(d, -L);
+    o.g.position.copy(_a.hand); o.g.quaternion.setFromUnitVectors(UP(), d);
+    o.body.scale.y = L; o.tip.position.y = L;
+    o.glow.position.copy(_a.tip);
+    const hot = s.contact && now - s.contact.t < 160 ? 1 - (now - s.contact.t) / 160 : 0;
+    o.glow.material.opacity = 0.7 * hot;
+  }
+  // --- física de las piezas ---
+  const nSub = Math.ceil(dt / 0.004), hs = dt / nSub;           // pasos chicos: el resorte nunca se dispara
+  for (const p of PADS) {
+    const ph = p.phys;
+    ph.flash *= Math.exp(-dt * 9); if (p.headMat) p.headMat.emissiveIntensity = ph.flash * (p.kind === 'drum' ? 0.35 : 0.5);
+    if (p.kind === 'drum' || p.kind === 'hat') {
+      for (let i = 0; i < nSub; i++) { ph.jv += (-ph.jy * 900 - ph.jv * 28) * hs; ph.jy += ph.jv * hs; }
+      p.group.position.y = p.base.y + ph.jy * 0.02;
+    }
+    if (p.kind === 'cym') {                               // resorte + amortiguación: el platillo se bambolea en su pie
+      const k = p.id === 'crash' ? 30 : 22, c = p.id === 'crash' ? 1.3 : 1.8;
+      for (let i = 0; i < nSub; i++) {
+        ph.vx += (-ph.wx * k - ph.vx * c) * hs; ph.vz += (-ph.wz * k - ph.vz * c) * hs;
+        ph.wx += ph.vx * hs; ph.wz += ph.vz * hs;
+      }
+      ph.wx = clamp(ph.wx, -0.5, 0.5); ph.wz = clamp(ph.wz, -0.5, 0.5);
+      ph.spinV *= Math.exp(-dt * 0.5); ph.spin += ph.spinV * dt;
+      p.group.rotation.set(p.baseRot.x + ph.wx * 0.5, p.baseRot.y, ph.wz * 0.5, 'YXZ');
+      p.spinG.rotation.y = ph.spin;
+    }
+    if (p.kind === 'hat') { const target = hatOpen ? 0.032 : 0.004; p.hatTop.position.y += (target - p.hatTop.position.y) * (1 - Math.exp(-dt * 30)); }
+  }
+  const kp = KICK.phys; kp.flash *= Math.exp(-dt * 9); KICK.headMat.emissiveIntensity = kp.flash * 0.25;
+  for (let i = 0; i < nSub; i++) { kp.jv += (-kp.jy * 600 - kp.jv * 22) * hs; kp.jy += kp.jv * hs; } KICK.group.position.z = KICK.base.z + kp.jy * 0.012;
+  if (KICK.beaterT !== undefined) { KICK.beaterT += dt; const t = KICK.beaterT; KICK.beater.rotation.x = -(t < 0.04 ? t / 0.04 : Math.max(0, 1 - (t - 0.04) / 0.15)) * 0.55; }
+  for (let i = ripples.length - 1; i >= 0; i--) {
+    const r = ripples[i]; r.t += dt; const k = r.t / 0.4;
+    r.m.scale.setScalar(r.r * (0.15 + 0.85 * k)); r.m.material.opacity *= Math.exp(-dt * 7);
+    if (k >= 1) { scene.remove(r.m); r.m.geometry.dispose(); r.m.material.dispose(); ripples.splice(i, 1); }
+  }
+  // cámara: mirada del baterista + sacudida del bombo
+  camShake *= Math.exp(-dt * 12);
+  camera.position.set(0.05 + (Math.random() - .5) * camShake * 0.01, 1.78 + (Math.random() - .5) * camShake * 0.01, 1.08);
+  camera.lookAt(0.12, 0.74, -0.62);
+  // HUD de latencia
+  if (!loop.t || now - loop.t > 500) { loop.t = now; for (const s of sticks) { const el = document.querySelector('#chip' + s.i + ' .pg'); if (el && s.conn) el.textContent = s.rtt === null ? '…' : Math.round(s.rtt / 2) + ' ms'; } }
+  renderer.render(scene, camera);
+}
+
+/* ---------- teclado ---------- */
+const KEYMAP = { KeyQ: 'crash', KeyE: 'ride', KeyA: 'hihat', KeyS: 'snare', KeyD: 'tom1', KeyF: 'tom2', KeyG: 'floor', KeyW: 'hihat', KeyR: 'ride', KeyH: 'floor' };
+function onKey(e) {
+  if (e.repeat) return;
+  if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { hatOpenKey = true; updateHat(); return; }
+  if (!actx || $('start').offsetParent) return;
+  if (e.code === 'Space') { e.preventDefault(); hitKick(0.85); return; }
+  const id = KEYMAP[e.code]; if (id) autoStrike(PADS_BY[id], e.altKey ? 0.35 : 0.85);
+}
+function onKeyUp(e) { if (e.code === 'ShiftLeft' || e.code === 'ShiftRight') { hatOpenKey = false; updateHat(); } }
+
+let tvWake = null;
+async function tvInit() {
+  $('tv').classList.remove('hidden');
+  refreshSlots(); createRoom();
+  initAudio();
+  try { await loadScript('https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'); buildScene(); }
+  catch (e) { const el = $('err'); el.classList.remove('hidden'); el.innerHTML = '⚠️ No pude cargar el motor 3D.<br>Revisá la conexión y recargá. La batería suena igual con el teclado.'; console.error(e); }
+  const ready = synthAll();
+  $('btnStart').focus();
+  $('btnStart').onclick = async () => {
+    try { await actx.resume(); } catch (_) {}
+    $('start').classList.add('hidden');
+    try { await document.documentElement.requestFullscreen(); } catch (_) {}
+    try { tvWake = await navigator.wakeLock.request('screen'); } catch (_) {}
+    ready.then(() => toast('🥁 Lista. Escaneá el QR con cada celu', 3));
+  };
+  addEventListener('keydown', onKey); addEventListener('keyup', onKeyUp);
+  $('tQR').onclick = () => showLobby($('lobby').classList.contains('hidden'));
+  $('tKeys').onclick = () => { const k = $('keys'); k.classList.toggle('hidden'); $('tKeys').classList.toggle('on', !k.classList.contains('hidden')); };
+  $('tMet').onclick = metroToggle;
+  $('tBpmM').onclick = () => setBpm(metro.bpm - 5); $('tBpmP').onclick = () => setBpm(metro.bpm + 5); setBpm(metro.bpm);
+  const vol = () => { $('tVol').textContent = '🔊 ' + VOLS[volI].n; if (masterG) masterG.gain.value = VOLS[volI].v; store.set('gd-vol', volI); };
+  $('tVol').onclick = () => { volI = (volI + 1) % 3; vol(); }; vol();
+  showLobby(true);
+  document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible') { try { tvWake = await navigator.wakeLock.request('screen'); } catch (_) {} } });
+}
+
+/* ============================================================
+   ================  CELU = PALO  ================
+   ============================================================ */
+const RATES = [1, 1.25, 1.5, 1.8];
+const SENS = [{ n: 'Suave', min: 100, max: 900 }, { n: 'Normal', min: 150, max: 1300 }, { n: 'Fuerte', min: 220, max: 1900 }];
+const PH = { peer: null, conn: null, n: 0, hand: 'R', rateI: +(store.get('gd-rate') ?? 0) || 0, sensI: +(store.get('gd-sens') ?? 1), wake: null };
+if (!(PH.sensI >= 0 && PH.sensI < 3)) PH.sensI = 1;
+const det = makeDetector({ min: SENS[PH.sensI].min, max: SENS[PH.sensI].max });
+// estado del sensor
+const SN = { elev: 0, yawRaw: 0, yawOff: null, yaw: 0, cb: 1, sg: 0, cg: 1, prevE: null, prevT: 0, diffRate: 0, gyroOK: false, gyroT: 0,
+  cal: { n: 0, sAg: 0, sAA: 0, sBg: 0, sBB: 0, sgg: 0 }, map: null, scale: 1, lastSend: 0, oriN: 0, hz: 0 };
+
+function phoneInit(code) {
+  $('phone').classList.remove('hidden');
+  $('pCode').value = (code || '').slice(0, 4);
+  for (const k of document.querySelectorAll('#pKeys button')) k.onclick = () => {
+    const el = $('pCode'), t = k.textContent;
+    if (t === '⌫') el.value = el.value.slice(0, -1); else if (t === '↩') { location.href = location.pathname + '?pick=1'; } else if (el.value.length < 4) el.value += t;
+  };
+  $('pGo').onclick = async () => {
+    const c = $('pCode').value.trim();
+    if (!/^\d{4}$/.test(c)) { $('pMsg').textContent = 'Poné el código de 4 números de la tele'; return; }
+    if (!(await askPerms())) return;
+    try { await document.documentElement.requestFullscreen({ navigationUI: 'hide' }); } catch (_) {}
+    try { await screen.orientation.lock('portrait'); } catch (_) {}
+    try { PH.wake = await navigator.wakeLock.request('screen'); } catch (_) {}
+    startSensors(); phoneConnect(c);
+  };
+  // pedales: el pulgar
+  const pedal = (el, k) => {
+    const on = e => { e.preventDefault(); try { el.setPointerCapture(e.pointerId); } catch (_) {} el.classList.add('down'); psend2({ t: 'p', n: ++PH.n, k, on: true }); buzz(k === 'kick' ? 18 : 8); };
+    const off = e => { if (!el.classList.contains('down')) return; el.classList.remove('down'); psend2({ t: 'p', n: ++PH.n, k, on: false }); };
+    el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('lostpointercapture', off);
+  };
+  pedal($('pKick'), 'kick'); pedal($('pHat'), 'hat');
+  $('pCal').onclick = () => { SN.yawOff = SN.yawRaw; buzz(30); $('pPad').textContent = '🎯 Centrado'; };
+  $('oHand').onclick = () => psend({ t: 'hand' });
+  const drawOpts = () => { $('oRate').textContent = 'Rates ' + RATES[PH.rateI] + 'x'; $('oSens').textContent = 'Golpe: ' + SENS[PH.sensI].n; det.cfg = { min: SENS[PH.sensI].min, max: SENS[PH.sensI].max }; };
+  $('oRate').onclick = () => { PH.rateI = (PH.rateI + 1) % RATES.length; store.set('gd-rate', PH.rateI); drawOpts(); };
+  $('oSens').onclick = () => { PH.sensI = (PH.sensI + 1) % SENS.length; store.set('gd-sens', PH.sensI); drawOpts(); };
+  drawOpts();
+  window.addEventListener('popstate', () => { if (PH.conn) try { history.pushState({ gd: 1 }, ''); } catch (_) {} });
+}
+async function askPerms() {
+  try {
+    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+      const r = await DeviceOrientationEvent.requestPermission();
+      if (r !== 'granted') { $('pMsg').textContent = 'Sin permiso del giroscopio no hay palo 😕'; return false; }
+    }
+    if (typeof DeviceMotionEvent !== 'undefined' && typeof DeviceMotionEvent.requestPermission === 'function') { try { await DeviceMotionEvent.requestPermission(); } catch (_) {} }
+    return true;
+  } catch (e) { $('pMsg').textContent = 'No se pudo pedir el permiso del giroscopio'; return false; }
+}
+function buzz(ms) { if (navigator.vibrate) try { navigator.vibrate(ms); } catch (_) {} }
+function psend(o) { if (PH.conn && PH.conn.open) { try { PH.conn.send(o); } catch (_) {} } }
+function psend2(o) { psend(o); setTimeout(() => psend(o), 18); }     // los golpes van dos veces (la tele descarta el repetido): si se pierde uno, llega el otro
+let sensorsOn = false;
+function startSensors() {
+  if (sensorsOn) return; sensorsOn = true;
+  window.addEventListener('deviceorientation', onOri);
+  window.addEventListener('devicemotion', onMotion);
+  setInterval(() => { SN.hz = SN.oriN; SN.oriN = 0; }, 1000);
+  setTimeout(() => { if (!SN.oriN && !SN.hz) $('pPad').textContent = '⚠️ No llega el giroscopio (¿https?)'; }, 1500);
+}
+// orientación → dirección de la punta del palo (eje de arriba del celu), sin importar cómo lo rotes en la mano
+function onOri(e) {
+  if (e.beta === null || e.beta === undefined) return;
+  SN.oriN++;
+  const a = (e.alpha || 0) * D2R, b = e.beta * D2R, g = (e.gamma || 0) * D2R;
+  const sa = Math.sin(a), ca = Math.cos(a), sb = Math.sin(b), cb = Math.cos(b);
+  SN.cb = cb; SN.sg = Math.sin(g); SN.cg = Math.cos(g);
+  const tx = -sa * cb, ty = ca * cb;                       // punta en el plano horizontal (este, norte)
+  SN.elev = Math.asin(clamp(sb, -1, 1)) * R2D;
+  if (Math.abs(cb) > 0.12) SN.yawRaw = Math.atan2(tx, ty) * R2D;
+  if (SN.yawOff === null) SN.yawOff = SN.yawRaw;
+  SN.yaw = clamp(wrapDeg(SN.yawRaw - SN.yawOff) * RATES[PH.rateI], -170, 170);
+  const t = performance.now();
+  if (SN.prevE !== null) { const dt = (t - SN.prevT) / 1000; if (dt > 0.002 && dt < 0.1) SN.diffRate = SN.diffRate * 0.35 + (-(SN.elev - SN.prevE) / dt) * 0.65; }
+  SN.prevE = SN.elev; SN.prevT = t;
+  if (!SN.map || t - SN.gyroT > 200) strike(t, SN.diffRate);      // sin giroscopio crudo: uso la orientación
+  if (t - SN.lastSend > 14) { SN.lastSend = t; psend({ t: 'o', y: Math.round(SN.yaw * 10) / 10, e: Math.round(SN.elev * 10) / 10 }); }
+  if (!(SN.oriN % 6)) $('pAng').textContent = `giro ${Math.round(SN.yaw)}° · altura ${Math.round(SN.elev)}° · ${SN.hz} Hz${SN.map ? ' · gyro' : ''}`;
+}
+// giroscopio crudo (como Betaflight: velocidad angular, sin esperar a la fusión) → velocidad con la que baja la punta
+function onMotion(e) {
+  const r = e.rotationRate; if (!r || r.alpha === null || r.alpha === undefined || SN.prevE === null) return;
+  const t = performance.now();
+  // dos mapeos posibles de ejes (Android/iOS no siempre coinciden): me quedo con el que mejor coincide con la orientación
+  const dA = -SN.cb * ((r.alpha || 0) * SN.sg + (r.beta || 0) * SN.cg);
+  const dB = -SN.cb * ((r.gamma || 0) * SN.sg + (r.alpha || 0) * SN.cg);
+  if (!SN.map) {
+    const C = SN.cal;
+    if (Math.abs(SN.diffRate) > 60) { C.n++; C.sAg += dA * SN.diffRate; C.sAA += dA * dA; C.sBg += dB * SN.diffRate; C.sBB += dB * dB; C.sgg += SN.diffRate * SN.diffRate; }
+    if (C.n >= 25) {
+      const cA = C.sAg / Math.sqrt(C.sAA * C.sgg + 1e-9), cB = C.sBg / Math.sqrt(C.sBB * C.sgg + 1e-9);
+      const best = Math.abs(cA) >= Math.abs(cB) ? 'A' : 'B', corr = Math.abs(best === 'A' ? cA : cB);
+      if (corr > 0.6) { SN.map = best; SN.scale = best === 'A' ? C.sAg / C.sAA : C.sBg / C.sBB; }
+      else SN.cal = { n: 0, sAg: 0, sAA: 0, sBg: 0, sBB: 0, sgg: 0 };
+    }
+    return;
+  }
+  SN.gyroT = t;
+  strike(t, (SN.map === 'A' ? dA : dB) * SN.scale);
+}
+function strike(t, down) {
+  const h = det.feed(t, down, SN.elev, SN.yaw);
+  if (!h) return;
+  buzz(Math.round(8 + 22 * h.v));
+  psend2({ t: 'h', n: ++PH.n, y: Math.round(h.yaw * 10) / 10, e: Math.round(h.elev * 10) / 10, v: Math.round(h.v * 1000) / 1000 });
+  const box = $('pHit'); box.classList.add('flash'); setTimeout(() => box.classList.remove('flash'), 70);
+  $('pVel').firstChild.style.width = Math.round(h.v * 100) + '%';
+}
+function phoneConnect(code) {
+  $('pMsg').textContent = 'Conectando…';
+  if (typeof Peer === 'undefined') { $('pMsg').textContent = 'No cargó PeerJS: revisá internet'; return; }
+  if (PH.peer) PH.peer.destroy();
+  PH.peer = new Peer();
+  PH.peer.on('open', () => {
+    PH.conn = PH.peer.connect(PREFIX + code, { serialization: 'json' });
+    PH.conn.on('open', () => {
+      psend({ t: 'ver', v: VERSION });
+      $('pJoin').classList.add('hidden'); $('pPlay').classList.remove('hidden');
+      $('pStat').textContent = '🟢 sala ' + code;
+      try { history.pushState({ gd: 1 }, ''); } catch (_) {}
+    });
+    PH.conn.on('data', d => {
+      if (d.t === 'ping') { psend({ t: 'pong', s: d.s }); if (d.r >= 0) { const el = $('pPing'); el.textContent = '📶 ' + Math.round(d.r / 2) + ' ms'; el.style.color = d.r > 120 ? '#ff5a5a' : d.r > 60 ? '#ffd166' : '#7dff8a'; } }
+      else if (d.t === 'hello') { PH.hand = d.hand; $('pHand').textContent = d.hand === 'R' ? 'MANO DERECHA' : 'MANO IZQUIERDA'; const f = $('pFeet'); f.style.flexDirection = d.hand === 'R' ? 'row' : 'row-reverse'; }
+      else if (d.t === 'fb') { $('pPad').textContent = d.p; }
+      else if (d.t === 'state') { $('pPad').textContent = d.txt; }
+    });
+    PH.conn.on('close', () => { $('pStat').textContent = '🔴 desconectado'; $('pPad').textContent = 'Se cortó: volvé a escanear el QR'; });
+  });
+  PH.peer.on('error', e => { $('pMsg').textContent = e.type === 'peer-unavailable' ? 'No encontré esa sala. Revisá el código.' : 'Error: ' + e.type; });
+}
+
+/* ---------- arranque (al final: todo ya está definido) ---------- */
+$('btnTV').onclick = () => { $('pick').classList.add('hidden'); tvInit(); };
+$('btnStick').onclick = () => { $('pick').classList.add('hidden'); phoneInit(''); };
+if (params.get('join')) phoneInit(params.get('join'));
+else if (params.get('pick')) $('pick').classList.remove('hidden');
+else if (!params.get('test')) {
+  const dev = detectDevice();
+  $('pick').classList.remove('hidden');
+  $('detMsg').textContent = dev === 'tv' ? '📺 Detecté una tele / PC: entrando como pantalla…' : '📱 Detecté un celular: entrando como palo…';
+  setTimeout(() => { if (!$('pick').classList.contains('hidden')) (dev === 'tv' ? $('btnTV') : $('btnStick')).click(); }, 700);
+}
+</script>
+</body>
+</html>
