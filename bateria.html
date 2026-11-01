@@ -135,6 +135,7 @@ h1 b { color:var(--amb); }
       <button id="tQR">🔳 QR</button>
       <button id="tMet">⏱ Metrónomo</button>
       <button id="tBpmM">−</button><button id="tBpm">90</button><button id="tBpmP">+</button>
+      <button id="tRoom">🏠 Estudio</button>
       <button id="tVol">🔊 Alto</button>
     </div>
   </div>
@@ -168,7 +169,7 @@ h1 b { color:var(--amb); }
 'use strict';
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const VERSION = 'v1.0';
+const VERSION = 'v1.1';
 const PREFIX = 'gyrodrums-v1-';
 const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -224,6 +225,7 @@ const SR_FALLBACK = 48000;
 const BANK = {};            // BANK[key][layer][variante] = AudioBuffer
 const LAYERS = [0.3, 0.65, 1.0];
 const MIX = { kick: 1.0, snare: 0.92, tom1: 0.85, tom2: 0.85, floor: 0.9, hatC: 0.5, hatO: 0.5, chick: 0.45, crash: 0.62, ride: 0.5, bell: 0.5 };
+const REV_SEND = { kick: 0.3, snare: 1, tom1: 0.8, tom2: 0.8, floor: 0.7, hatC: 0.5, hatO: 0.4, chick: 0.3, crash: 0.35, ride: 0.3, bell: 0.4 };
 const VOLS = [{ n: 'Bajo', v: .35 }, { n: 'Medio', v: .7 }, { n: 'Alto', v: 1 }];
 let volI = +(store.get('gd-vol') ?? 2); if (!(volI >= 0 && volI < 3)) volI = 2;
 let hatOpen = false, hatOpenKey = false, hatOpenPedal = false;
@@ -239,20 +241,30 @@ function initAudio() {
   bus = actx.createGain();
   bus.connect(comp); comp.connect(masterG); masterG.connect(actx.destination);
   // sala: respuesta al impulso generada (cuarto de ensayo chico, ~1.3 s)
-  const conv = actx.createConvolver(); conv.buffer = makeRoomIR(1.3);
-  revSend = actx.createGain(); revSend.gain.value = 0.22;
-  revSend.connect(conv); conv.connect(comp);
+  conv = actx.createConvolver();
+  revSend = actx.createGain();
+  revSend.connect(conv); conv.connect(masterG);
+  setRoom(roomI);
+}
+const ROOMS = [{ n: 'Seca', sec: 0.2, send: 0 }, { n: 'Estudio', sec: 0.32, send: 0.06 }, { n: 'Sala', sec: 0.7, send: 0.12 }];
+let roomI = +(store.get('gd-room') ?? 1); if (!(roomI >= 0 && roomI < 3)) roomI = 1;
+let conv = null;
+function setRoom(i) {
+  roomI = i; store.set('gd-room', i);
+  if (!actx) return;
+  revSend.gain.value = ROOMS[i].send;
+  if (ROOMS[i].send > 0) conv.buffer = makeRoomIR(ROOMS[i].sec);
+  const b = document.getElementById('tRoom'); if (b) b.textContent = '🏠 ' + ROOMS[i].n;
 }
 function makeRoomIR(sec) {
   const SR = actx.sampleRate, n = Math.floor(sec * SR), b = actx.createBuffer(2, n, SR), rnd = mulberry32(77);
   for (let ch = 0; ch < 2; ch++) {
     const d = b.getChannelData(ch); let lp = 0;
     for (let i = 0; i < n; i++) {
-      const t = i / SR, k = 0.15 + 0.8 * Math.exp(-t / 0.25);          // se oscurece con el tiempo
+      const t = i / SR, k = 0.1 + 0.6 * Math.exp(-t / 0.08);          // se oscurece rápido, como un cuarto con tratamiento
       lp += k * ((rnd() * 2 - 1) - lp);
-      d[i] = lp * Math.exp(-t / 0.32) * (t < 0.008 ? t / 0.008 : 1);
+      d[i] = lp * Math.exp(-t / (sec / 6.9)) * (t < 0.003 ? t / 0.003 : 1);
     }
-    for (const [ms, a] of [[7, .5], [11, .35], [17, .3], [23, .22], [31, .18], [43, .12]]) { const i = Math.floor((ms + ch * 1.7) * SR / 1000); d[i] += a * (rnd() < .5 ? -1 : 1); }
   }
   return b;
 }
@@ -326,8 +338,8 @@ function synthAll() {
       return sat(o, 1.1 + 0.8 * v);
     },
     tom(v, r, f0, size) {
-      const o = buf(1.6 * size), gl = 0.09 + 0.17 * v;
-      const R = [1, 1.5, 1.96, 2.42, 2.82], A = [1, .45, .26, .18, .1], T = [.5, .24, .17, .12, .09];
+      const o = buf(1.2 * size), gl = 0.09 + 0.17 * v;
+      const R = [1, 1.5, 1.96, 2.42, 2.82], A = [1, .45, .26, .18, .1], T = [.36, .18, .13, .1, .07];
       for (let k = 0; k < R.length; k++) mode(o, f0 * R[k] * (1 + (r() - .5) * .008), A[k] * (k ? 0.5 + 0.6 * v : 1), T[k] * size, gl, 0.065, r() * TAU);
       const st = env(bq(noise(o.length, r), 'bp', 2400, 0.8), 0.0025); mixIn(o, st, 0.2 + 0.6 * v);
       const sh = env(bq(noise(o.length, r), 'lp', 900, 0.7), 0.035, 0.001); mixIn(o, sh, 0.25);
@@ -427,7 +439,8 @@ function playSample(key, v, pan) {
   src.connect(f); f.connect(g);
   let out = g;
   if (actx.createStereoPanner) { const p = actx.createStereoPanner(); p.pan.value = pan || 0; g.connect(p); out = p; }
-  out.connect(bus); out.connect(revSend);
+  out.connect(bus);
+  const rs = REV_SEND[key] ?? 1; if (rs > 0) { const sg = actx.createGain(); sg.gain.value = rs; out.connect(sg); sg.connect(revSend); }
   src.start(t);
   return { src, g };
 }
@@ -916,6 +929,7 @@ async function tvInit() {
   $('tBpmM').onclick = () => setBpm(metro.bpm - 5); $('tBpmP').onclick = () => setBpm(metro.bpm + 5); setBpm(metro.bpm);
   const vol = () => { $('tVol').textContent = '🔊 ' + VOLS[volI].n; if (masterG) masterG.gain.value = VOLS[volI].v; store.set('gd-vol', volI); };
   $('tVol').onclick = () => { volI = (volI + 1) % 3; vol(); }; vol();
+  $('tRoom').onclick = () => setRoom((roomI + 1) % ROOMS.length); setRoom(roomI);
   showLobby(true);
   document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible') { try { tvWake = await navigator.wakeLock.request('screen'); } catch (_) {} } });
 }
