@@ -16,6 +16,8 @@ button { font:inherit; color:var(--tx); background:#222632; border:1px solid var
 button:focus-visible { outline:3px solid var(--amb); outline-offset:2px; }
 button.primary { background:var(--amb); color:#1a1205; border:0; font-weight:800; }
 .hidden { display:none !important; }
+.ver { color:var(--mut); font-size:12px; letter-spacing:.06em; opacity:.8; font-variant-numeric:tabular-nums; }
+#verTag { position:absolute; right:12px; top:8px; z-index:6; pointer-events:none; }
 h1 { font-weight:900; letter-spacing:.04em; margin:0; }
 h1 b { color:var(--amb); }
 
@@ -102,16 +104,19 @@ h1 b { color:var(--amb); }
   <h1>GYRO <b>DRUMS</b></h1>
   <div id="detMsg"></div>
   <div class="row"><button id="btnTV">📺 Soy la pantalla</button><button id="btnStick">🥢 Soy un palo (celu)</button></div>
+  <div class="ver"></div>
 </div>
 
 <!-- ===================== TELE ===================== -->
 <div id="tv" class="hidden">
   <canvas id="c"></canvas>
+  <div id="verTag" class="ver"></div>
   <div id="start" class="overlay">
     <h1>GYRO<br><b>DRUMS</b></h1>
     <p>Una batería de verdad con dos celus como palos. Escaneá el QR con cada celu, apuntá al redoblante y golpeá el aire como si tuvieras los palos en la mano.</p>
     <button id="btnStart" class="primary">🥁 Empezar</button>
     <div id="loadTxt">Afinando la batería…</div>
+    <div class="ver"></div>
   </div>
   <div id="lobby" class="card">
     <div class="ttl">🥢 Escaneá con cada celu</div>
@@ -151,10 +156,11 @@ h1 b { color:var(--amb); }
     <div id="pKeys"><button>1</button><button>2</button><button>3</button><button>4</button><button>5</button><button>6</button><button>7</button><button>8</button><button>9</button><button>⌫</button><button>0</button><button>↩</button></div>
     <button id="pGo" class="primary">🥁 Conectar</button>
     <div id="pMsg"></div>
+    <div class="ver"></div>
     <div class="grip">Agarralo <b>como un palo</b>: la mano cerrada en la <b>parte de abajo</b>, la parte de <b>arriba apuntando a la tele</b> y el pulgar sobre la pantalla. Usá una funda que agarre bien o la correa: ¡no lo revoleés!</div>
   </div>
   <div id="pPlay" class="hidden">
-    <div id="pTop"><span id="pHand">MANO DERECHA</span><span id="pStat">🟢</span><span id="pPing">📶 —</span></div>
+    <div id="pTop"><span id="pHand">MANO DERECHA</span><span id="pStat">🟢</span><span id="pPing">📶 —</span><span class="ver" id="pVer"></span></div>
     <button id="pCal">🎯 CENTRAR<br><small style="font-size:13px;font-weight:600">apuntá al redoblante y tocá</small></button>
     <div id="pHit"><div id="pPad">¡Golpeá!</div><div id="pVel"><u></u></div><div id="pAng">—</div></div>
     <div id="pOpts"><button id="oHand">⇄ Mano</button><button id="oRate">Rates 1x</button><button id="oSens">Golpe: Normal</button></div>
@@ -169,7 +175,8 @@ h1 b { color:var(--amb); }
 'use strict';
 const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const VERSION = 'v1.1';
+const VERSION = 'v1.2';
+for (const el of document.querySelectorAll('.ver')) el.textContent = el.id === 'pVer' ? VERSION : 'Gyro Drums ' + VERSION;
 const PREFIX = 'gyrodrums-v1-';
 const D2R = Math.PI / 180, R2D = 180 / Math.PI;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -536,6 +543,7 @@ setInterval(() => { for (const s of sticks) if (s.conn && s.conn.open) { try { s
 function onStickData(s, d) {
   switch (d.t) {
     case 'o': s.ty = d.y; s.te = d.e; s.lastO = performance.now(); break;
+    case 'ver': if (d.v !== VERSION) toast('⚠️ ' + handName(s.hand) + ' tiene la ' + d.v + ' (tele: ' + VERSION + '): recargá el celu', 5); break;
     case 'h': if (dup(s, d.n)) return; phoneStrike(s, d.y, d.e, d.v); break;
     case 'p': if (dup(s, d.n)) return;
       if (d.k === 'kick') { if (d.on) hitKick(0.78 + Math.random() * 0.12); }
